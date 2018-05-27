@@ -4,26 +4,26 @@ if (!require("stringr")) install.packages("stringr", repos = "https://cloud.r-pr
 stopifnot(library(stringr, logical.return = TRUE))
 
 #
-# configure dates
-# startDate <- as.Date("2017-09-15")
-startDate <- as.Date(Sys.Date()-3)
-endDate <- as.Date(Sys.Date())
+# configure dates, i.e. last 3 full days
+startDate <- as.Date(Sys.Date() - 3)
+endDate <- as.Date(Sys.Date() - 1)
 
-# configure working directory
-setwd("O:/Lulu DWH/External Data Integration")
+# set working directory
+setwd("O:/Path/To/Your/Project/Folder")
 
-config <- data.frame(CustomerAccountId = c("11859", "830297"), 
-                     CustomerId = c("12917", "628452"), 
-                     Password = c("", ""), 
-                     UserName = c("", ""), 
-                     Format = c("Csv", "Csv"), 
-                     DeveloperToken = c("", ""), 
+# configure list of BingAds clients
+config <- data.frame(CustomerAccountId = c(""), 
+                     CustomerId = c(""), 
+                     Password = c(""), 
+                     UserName = c(""), 
+                     Format = c("Csv"), 
+                     DeveloperToken = c(""), 
                      stringsAsFactors = FALSE)
 
 submitGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken, Password, UserName, Format, from, to) {
   
-  if (!require("RCurl")) install.packages("RCurl")
-  stopifnot(library(RCurl, logical.return = TRUE))
+  if (!require("httr")) install.packages("httr")
+  stopifnot(library(httr, logical.return = TRUE))
   if (!require("XML")) install.packages("XML")
   stopifnot(library(XML, logical.return = TRUE))
   
@@ -46,7 +46,8 @@ submitGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken,
   
   API_URL <- "https://reporting.api.bingads.microsoft.com/Api/Advertiser/Reporting/v11/ReportingService.svc"
   
-  library(httr)
+  # Force TLS1.2 as per Microsoft's requirements 
+  # https://blogs.msdn.microsoft.com/bing_ads_api/2018/02/02/mandatory-upgrade-required-to-tls1-2/
   set_config(config(sslversion = 6))
   r <- POST(url = API_URL, 
             add_headers(SOAPAction = "SubmitGenerateReport", 
@@ -59,8 +60,8 @@ submitGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken,
 }
 pollGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken, Password, UserName, Format, ReportRequestId) {
   
-  if (!require("RCurl")) install.packages("RCurl")
-  stopifnot(library(RCurl, logical.return = TRUE))
+  if (!require("httr")) install.packages("httr")
+  stopifnot(library(httr, logical.return = TRUE))
   if (!require("XML")) install.packages("XML")
   stopifnot(library(XML, logical.return = TRUE))
   if (!require("stringr")) install.packages("stringr")
@@ -83,7 +84,8 @@ pollGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken, P
   ReportRequestStatus <- ""
   while(ReportRequestStatus != "Success") {
 
-    library(httr)
+    # Force TLS1.2 as per Microsoft's requirements 
+    # https://blogs.msdn.microsoft.com/bing_ads_api/2018/02/02/mandatory-upgrade-required-to-tls1-2/
     set_config(config(sslversion = 6))
     r <- POST(url = API_URL, 
               add_headers(SOAPAction = "PollGenerateReport", 
@@ -99,13 +101,12 @@ pollGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken, P
   if (ReportRequestStatus == "Success") {
     ReportDownloadUrl <- xmlToList(data)$Body$PollGenerateReportResponse$ReportRequestStatus$ReportDownloadUrl
     
-    # test code starts
-    library(httr)
+    # Force TLS1.2 as per Microsoft's requirements 
+    # https://blogs.msdn.microsoft.com/bing_ads_api/2018/02/02/mandatory-upgrade-required-to-tls1-2/
     set_config(config(sslversion = 6))
     r <- GET(url = ReportDownloadUrl, 
              write_disk(path = paste0("bing-", ReportRequestId, ".zip"), 
                         overwrite = TRUE))
-    # test code ends
     
     unzip(paste0("bing-", ReportRequestId, ".zip"))
     unlink(paste0("bing-", ReportRequestId, ".zip"))
@@ -121,6 +122,7 @@ pollGenerateReport <- function (CustomerAccountId, CustomerId, DeveloperToken, P
   return(df)
 }
 
+# loop over list of BingAds clients and download DestinationUrlPerformanceReportRequest report
 report <- NULL
 for(i in 1:nrow(config)) { 
 	print(paste0("Fetching ", config$UserName[i], "... "))
@@ -128,9 +130,6 @@ for(i in 1:nrow(config)) {
 	df <- pollGenerateReport(config$CustomerAccountId[i], config$CustomerId[i], config$DeveloperToken[i], config$Password[i], config$UserName[i], config$Format[i], ReportRequestId)
 	if(!is.null(df)) {
 		print(paste0(nrow(df), " rows fetched. "))
-		# convert to lower case
-		df <- as.data.frame(sapply(df, tolower), 
-							stringsAsFactors = FALSE)
 		# remove footer row
 		df <- df[!str_detect(df$GregorianDate, "microsoft") > 0, ]
 		df$GregorianDate <- as.Date(df$GregorianDate)
@@ -153,4 +152,5 @@ for(i in 1:nrow(config)) {
 	rm(ReportRequestId, df)
 }
 
-write.table(report, "Bing.csv", sep = "," , row.names = FALSE)
+# Store report in CSV
+write.csv(x = report, file = "Bing.csv", row.names = FALSE)

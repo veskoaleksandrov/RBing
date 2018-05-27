@@ -1,8 +1,3 @@
-if (!require("plyr")) install.packages("plyr", repos = "https://cloud.r-project.org/")
-stopifnot(library(plyr, logical.return = TRUE))
-if (!require("stringr")) install.packages("stringr", repos = "https://cloud.r-project.org/")
-stopifnot(library(stringr, logical.return = TRUE))
-
 #
 # configure dates, i.e. last 3 full days
 startDate <- as.Date(Sys.Date() - 3)
